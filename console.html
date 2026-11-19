@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBTC Comercial SaaS — Console SDR, RAG & Outbound</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #111827;
+      --panel-2: #1e293b;
+      --border: #283548;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #10b981;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; line-height: 1.45; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+    .badge { font-size: 0.75rem; padding: 3px 9px; border-radius: 999px; background: rgba(56,189,248,0.14); color: var(--accent); border: 1px solid rgba(56,189,248,0.35); }
+    .config-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; background: var(--panel); padding: 12px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 16px; }
+    label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+    input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 0.85rem; }
+    textarea { min-height: 84px; resize: vertical; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab-btn { background: var(--panel); color: var(--muted); border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+    .tab-btn.active { background: var(--accent); color: #061220; border-color: var(--accent); }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .card h2 { font-size: 0.98rem; margin-bottom: 10px; color: var(--accent); }
+    .field { margin-bottom: 10px; }
+    button.primary { background: var(--accent-2); color: #04150e; border: none; padding: 9px 14px; border-radius: 7px; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+    button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 7px; font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+    .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    pre { background: #060a14; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 0.78rem; color: #cbd5e1; overflow: auto; max-height: 360px; white-space: pre-wrap; word-break: break-word; }
+    .hidden { display: none; }
+    .status-pill { font-size: 0.78rem; color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>TBTC Comercial SaaS — Console de Agentes Autônomos</h1>
+        <small style="color: var(--muted);">SDR Function Calling • RAG pgvector HNSW • Outbound & Cadências</small>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="healthBadge" class="badge">Verificando API...</span>
+      </div>
+    </header>
+
+    <div class="config-bar">
+      <div>
+        <label>Base URL da API</label>
+        <input id="apiBaseUrl" value="http://localhost:8001" />
+      </div>
+      <div>
+        <label>X-Tenant-ID</label>
+        <input id="tenantId" value="badb7f9b-e6e4-46be-8690-ee9d88dc5a0e" />
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="secondary" onclick="checkHealth()" style="width:100%;">Testar /health</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('sdr', this)">SDR Autônomo</button>
+      <button class="tab-btn" onclick="switchTab('rag', this)">Base RAG (pgvector)</button>
+      <button class="tab-btn" onclick="switchTab('outbound', this)">Outbound & Cadências</button>
+    </div>
+
+    <div id="tab-sdr" class="grid-2">
+      <div class="card">
+        <h2>Simular Mensagem de Lead (SDR + CRM + BANT)</h2>
+        <div class="field">
+          <label>Thread ID / WhatsApp</label>
+          <input id="sdrThread" value="5541998887766" />
+        </div>
+        <div class="field">
+          <label>Nome do Lead</label>
+          <input id="sdrName" value="Carlos Mendes" />
+        </div>
+        <div class="field">
+          <label>Mensagem do Lead</label>
+          <textarea id="sdrMsg">Olá! Sou Carlos, Diretor de TI da Logística Litoral PR. Precisamos de 2 racks dedicados de 42U com SLA de 99,98%. Qual o valor mensal e o setup?</textarea>
+        </div>
+        <div class="row-actions">
+          <button class="primary" onclick="sendSdrMessage()">Enviar ao SDR Autônomo</button>
+          <button class="secondary" onclick="listConversations()">Listar Conversas</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Resposta & Ferramentas Executadas</h2>
+        <pre id="outputBox">Pronto para executar comandos...</pre>
+      </div>
+    </div>
+
+    <div id="tab-rag" class="grid-2 hidden">
+      <div class="card">
+        <h2>Ingerir Documento na Base Vetorial</h2>
+        <div class="field">
+          <label>Título</label>
+          <input id="ragTitle" value="Tabela Comercial Colocation & SLA 2026" />
+        </div>
+        <div class="field">
+          <label>Categoria</label>
+          <input id="ragCategory" value="precos" />
+        </div>
+        <div class="field">
+          <label>Conteúdo Técnico / Comercial</label>
+          <textarea id="ragContent">Rack Dedicado 42U por R$ 5.400/mês com 4 kVA A+B, SLA de 99,98% em contrato de 12 meses e setup de R$ 1.500 (isento em contratos de 24 meses).</textarea>
+        </div>
+        <div class="row-actions">
+          <button class="primary" onclick="ingestRag()">Indexar Embeddings (768d)</button>
+          <button class="secondary" onclick="searchRag()">Testar Busca Semântica</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Resultado RAG</h2>
+        <pre id="ragOutput">Aguardando ação na base RAG...</pre>
+      </div>
+    </div>
+
+    <div id="tab-outbound" class="grid-2 hidden">
+      <div class="card">
+        <h2>Importar & Enriquecer Lead Outbound (Gemini)</h2>
+        <div class="field">
+          <label>Empresa</label>
+          <input id="outCompany" value="Porto Paranaguá Logística Integrada" />
+        </div>
+        <div class="field">
+          <label>Contato & Cargo</label>
+          <input id="outContact" value="Fernanda Rocha — Gerente de Infraestrutura" />
+        </div>
+        <div class="field">
+          <label>WhatsApp E.164</label>
+          <input id="outWa" value="+5541997776655" />
+        </div>
+        <div class="row-actions">
+          <button class="primary" onclick="importOutboundLead()">Importar & Enriquecer com IA</button>
+          <button class="secondary" onclick="listOutboundLeads()">Listar Leads Outbound</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Resultado Outbound & ICP</h2>
+        <pre id="outOutput">Aguardando ação outbound...</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getConfig() {
+      return {
+        baseUrl: document.getElementById("apiBaseUrl").value.trim().replace(/\/+$/, ""),
+        tenantId: document.getElementById("tenantId").value.trim()
+      };
+    }
+
+    function switchTab(tabName, btn) {
+      ["sdr", "rag", "outbound"].forEach(t => {
+        document.getElementById("tab-" + t).classList.toggle("hidden", t !== tabName);
+      });
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    }
+
+    async function apiFetch(path, method = "GET", body = null) {
+      const { baseUrl, tenantId } = getConfig();
+      const headers = { "X-Tenant-ID": tenantId };
+      if (body !== null) headers["Content-Type"] = "application/json";
+      const res = await fetch(baseUrl + path, {
+        method,
+        headers,
+        body: body !== null ? JSON.stringify(body) : null
+      });
+      const txt = await res.text();
+      try {
+        return { status: res.status, data: JSON.parse(txt) };
+      } catch {
+        return { status: res.status, data: txt };
+      }
+    }
+
+    async function checkHealth() {
+      const { baseUrl } = getConfig();
+      const badge = document.getElementById("healthBadge");
+      try {
+        const res = await fetch(baseUrl + "/health");
+        if (res.ok) {
+          badge.textContent = "API Online (200)";
+          badge.style.color = "#10b981";
+        } else {
+          badge.textContent = "API HTTP " + res.status;
+          badge.style.color = "#f59e0b";
+        }
+      } catch {
+        badge.textContent = "API Offline / CORS";
+        badge.style.color = "#ef4444";
+      }
+    }
+
+    async function sendSdrMessage() {
+      const out = document.getElementById("outputBox");
+      out.textContent = "Processando com SDR Autônomo + Function Calling...";
+      const payload = {
+        external_thread_id: document.getElementById("sdrThread").value.trim(),
+        channel: "whatsapp",
+        lead_identifier: "+" + document.getElementById("sdrThread").value.trim().replace(/\D/g, ""),
+        lead_name_hint: document.getElementById("sdrName").value.trim(),
+        message: document.getElementById("sdrMsg").value.trim()
+      };
+      const res = await apiFetch("/api/v1/ai/sdr/respond", "POST", payload);
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    async function listConversations() {
+      const out = document.getElementById("outputBox");
+      const res = await apiFetch("/api/v1/ai/conversations");
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    async function ingestRag() {
+      const out = document.getElementById("ragOutput");
+      out.textContent = "Gerando embeddings e gravando no pgvector...";
+      const res = await apiFetch("/api/v1/ai/knowledge/documents", "POST", {
+        title: document.getElementById("ragTitle").value.trim(),
+        category: document.getElementById("ragCategory").value.trim(),
+        content: document.getElementById("ragContent").value.trim(),
+        tags: ["colocation", "sla"]
+      });
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    async function searchRag() {
+      const out = document.getElementById("ragOutput");
+      const res = await apiFetch("/api/v1/ai/knowledge/search", "POST", {
+        query: document.getElementById("ragContent").value.slice(0, 120),
+        top_k: 3,
+        min_similarity: 0.35
+      });
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    async function importOutboundLead() {
+      const out = document.getElementById("outOutput");
+      out.textContent = "Enriquecendo lead com Gemini...";
+      const parts = document.getElementById("outContact").value.split("—");
+      const contactName = (parts[0] || "").trim();
+      const jobTitle = (parts[1] || "").trim();
+      const res = await apiFetch("/api/v1/outbound/leads/import", "POST", {
+        auto_enrich: true,
+        leads: [{
+          company_name: document.getElementById("outCompany").value.trim(),
+          contact_name: contactName || null,
+          job_title: jobTitle || null,
+          whatsapp_e164: document.getElementById("outWa").value.trim(),
+          city: "Paranaguá",
+          state_uf: "PR",
+          sector: "Logística & Infraestrutura"
+        }]
+      });
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    async function listOutboundLeads() {
+      const out = document.getElementById("outOutput");
+      const res = await apiFetch("/api/v1/outbound/leads");
+      out.textContent = JSON.stringify(res, null, 2);
+    }
+
+    checkHealth();
+  </script>
+
+<!-- CRM_DEALS_MODULE_WIDGET -->
+<div id="crmQuickDrawer" style="position:fixed;right:18px;bottom:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleCrmDrawer()" style="background:#10b981;color:#06281e;font-weight:700;border:none;border-radius:999px;padding:12px 18px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    CRM &amp; Contratos
+  </button>
+  <div id="crmDrawerBody" style="display:none;width:430px;max-width:92vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Pipeline CRM &amp; Contratos</strong>
+      <button onclick="loadCrmSnapshot()" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="crmAnalyticsBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:12px;">Clique em Atualizar para carregar KPIs do CRM.</div>
+    <div style="display:grid;gap:8px;margin-bottom:12px;">
+      <input id="crmDealTitle" placeholder="Título da Oportunidade (ex: Plano Enterprise)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="crmDealContact" placeholder="Nome do Contato" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="crmDealCompany" placeholder="Empresa (opcional)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="crmDealAmount" type="number" step="0.01" placeholder="Valor R$ (ex: 2500.00)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="createQuickDeal()" style="background:#6366f1;color:#fff;font-weight:600;border:none;border-radius:8px;padding:9px;cursor:pointer;">+ Criar Oportunidade no Funil</button>
+    </div>
+    <div id="crmDealsList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getConsoleHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleCrmDrawer() {
+  const el = document.getElementById("crmDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadCrmSnapshot();
+}
+async function loadCrmSnapshot() {
+  const box = document.getElementById("crmAnalyticsBox");
+  const list = document.getElementById("crmDealsList");
+  try {
+    const [aRes, dRes] = await Promise.all([
+      fetch("/api/v1/crm/analytics", { headers: getConsoleHeaders() }),
+      fetch("/api/v1/crm/deals?limit=10", { headers: getConsoleHeaders() })
+    ]);
+    if (!aRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + aRes.status + ").";
+      return;
+    }
+    const a = await aRes.json();
+    box.innerHTML =
+      "<b>Pipeline Aberto:</b> R$ " + a.open_pipeline_value +
+      " | <b>Forecast:</b> R$ " + a.weighted_forecast_value +
+      "<br><b>Receita Ganha:</b> R$ " + a.won_revenue_total +
+      " | <b>Win Rate:</b> " + a.win_rate_percent + "%" +
+      "<br><b>Contratos Ativos:</b> " + a.contracts_signed_or_active_count +
+      " (MRR: R$ " + a.contracts_mrr_total + ")";
+    const deals = dRes.ok ? await dRes.json() : [];
+    list.innerHTML = deals.map(d =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #10b981;'>" +
+      "<b>" + d.title + "</b> — R$ " + d.amount + " (" + d.probability + "%)<br>" +
+      "<span style='color:#94a3b8;'>" + d.contact_name + (d.company_name ? " • " + d.company_name : "") + " [" + d.status + "]</span>" +
+      "</div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhuma oportunidade cadastrada ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar CRM: " + err;
+  }
+}
+async function createQuickDeal() {
+  const payload = {
+    title: document.getElementById("crmDealTitle").value.trim(),
+    contact_name: document.getElementById("crmDealContact").value.trim(),
+    company_name: document.getElementById("crmDealCompany").value.trim() || null,
+    amount: parseFloat(document.getElementById("crmDealAmount").value || "0")
+  };
+  if (!payload.title || !payload.contact_name) return alert("Preencha Título e Nome do Contato.");
+  const res = await fetch("/api/v1/crm/deals", {
+    method: "POST",
+    headers: getConsoleHeaders(),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return alert("Falha ao criar Deal: " + (await res.text()));
+  document.getElementById("crmDealTitle").value = "";
+  document.getElementById("crmDealContact").value = "";
+  document.getElementById("crmDealCompany").value = "";
+  document.getElementById("crmDealAmount").value = "";
+  loadCrmSnapshot();
+}
+</script>
+
+
+<!-- BILLING_COMMISSIONS_WIDGET -->
+<div id="billingQuickDrawer" style="position:fixed;left:18px;bottom:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleBillingDrawer()" style="background:#f59e0b;color:#1c1917;font-weight:700;border:none;border-radius:999px;padding:12px 18px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    Faturamento &amp; Comissões
+  </button>
+  <div id="billingDrawerBody" style="display:none;width:430px;max-width:92vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Caixa, Cobranças &amp; Comissões</strong>
+      <button onclick="loadBillingSnapshot()" style="background:#1e293b;color:#fbbf24;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="billingSummaryBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:12px;">Clique em Atualizar para carregar resumo financeiro.</div>
+    <div style="display:grid;gap:8px;margin-bottom:12px;">
+      <input id="billCustomer" placeholder="Cliente / Empresa" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="billDesc" placeholder="Descrição da Cobrança" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="billAmount" type="number" step="0.01" placeholder="Valor R$ (ex: 1500.00)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="billCloser" placeholder="Closer Responsável (opcional)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="createQuickInvoice()" style="background:#f59e0b;color:#1c1917;font-weight:700;border:none;border-radius:8px;padding:9px;cursor:pointer;">+ Emitir Cobrança PIX</button>
+    </div>
+    <div id="billingInvoicesList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getBillingHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleBillingDrawer() {
+  const el = document.getElementById("billingDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadBillingSnapshot();
+}
+async function loadBillingSnapshot() {
+  const box = document.getElementById("billingSummaryBox");
+  const list = document.getElementById("billingInvoicesList");
+  try {
+    const [sRes, iRes] = await Promise.all([
+      fetch("/api/v1/billing/summary", { headers: getBillingHeaders() }),
+      fetch("/api/v1/billing/invoices?limit=10", { headers: getBillingHeaders() })
+    ]);
+    if (!sRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + sRes.status + ").";
+      return;
+    }
+    const s = await sRes.json();
+    box.innerHTML =
+      "<b>Em Caixa:</b> R$ " + s.total_paid_amount +
+      " | <b>A Receber:</b> R$ " + s.total_pending_amount +
+      "<br><b>Comissões Pendentes:</b> R$ " + s.commissions_pending_amount +
+      " | <b>Pagas:</b> R$ " + s.commissions_paid_amount +
+      "<br><b>Receita Líquida Pós-Comissão:</b> R$ " + s.net_revenue_after_commissions;
+    const invs = iRes.ok ? await iRes.json() : [];
+    list.innerHTML = invs.map(inv =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #f59e0b;display:flex;justify-content:space-between;align-items:center;gap:8px;'>" +
+      "<div><b>" + inv.invoice_number + "</b> — R$ " + inv.net_amount + " [" + inv.status + "]<br>" +
+      "<span style='color:#94a3b8;'>" + inv.customer_name + " • " + inv.description + "</span></div>" +
+      (inv.status === "PENDING" ? "<button onclick=\"payQuickInvoice('" + inv.id + "')\" style='background:#10b981;color:#06281e;font-weight:700;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;'>Baixar</button>" : "") +
+      "</div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhuma fatura emitida ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar faturamento: " + err;
+  }
+}
+async function createQuickInvoice() {
+  const payload = {
+    customer_name: document.getElementById("billCustomer").value.trim(),
+    description: document.getElementById("billDesc").value.trim(),
+    amount: parseFloat(document.getElementById("billAmount").value || "0"),
+    closer_name: document.getElementById("billCloser").value.trim() || null
+  };
+  if (!payload.customer_name || !payload.description || !payload.amount) return alert("Preencha Cliente, Descrição e Valor.");
+  const res = await fetch("/api/v1/billing/invoices", {
+    method: "POST",
+    headers: getBillingHeaders(),
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return alert("Falha ao emitir fatura: " + (await res.text()));
+  document.getElementById("billCustomer").value = "";
+  document.getElementById("billDesc").value = "";
+  document.getElementById("billAmount").value = "";
+  document.getElementById("billCloser").value = "";
+  loadBillingSnapshot();
+}
+async function payQuickInvoice(id) {
+  const res = await fetch("/api/v1/billing/invoices/" + id + "/pay", {
+    method: "POST",
+    headers: getBillingHeaders(),
+    body: JSON.stringify({ notes: "Baixa rápida via Console Web" })
+  });
+  if (!res.ok) return alert("Falha ao liquidar fatura: " + (await res.text()));
+  loadBillingSnapshot();
+}
+</script>
+
+
+<!-- AUTOMATION_EXECUTIVE_WIDGET -->
+<div id="autoExecDrawer" style="position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleAutoDrawer()" style="background:#6366f1;color:#fff;font-weight:700;border:none;border-radius:999px;padding:12px 18px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    Automação &amp; Relatórios
+  </button>
+  <div id="autoDrawerBody" style="display:none;width:460px;max-width:94vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Relatório Executivo &amp; Régua Automática</strong>
+      <div style="display:flex;gap:6px;">
+        <button onclick="runDunningScan()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:4px 9px;cursor:pointer;font-size:11px;">Varrer Vencidas</button>
+        <button onclick="loadAutoSnapshot()" style="background:#1e293b;color:#818cf8;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:11px;">Atualizar</button>
+      </div>
+    </div>
+    <div id="execReportBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:12px;">Clique em Atualizar para carregar o Relatório Executivo Consolidado.</div>
+    <div style="display:grid;gap:8px;margin-bottom:12px;">
+      <input id="autoDestPhone" placeholder="WhatsApp Destino (ex: 5541999999999)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="autoMsgText" placeholder="Mensagem rápida para fila omnichannel" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="sendQuickDispatch()" style="background:#6366f1;color:#fff;font-weight:700;border:none;border-radius:8px;padding:9px;cursor:pointer;">Enfileirar &amp; Disparar Agora</button>
+    </div>
+    <div id="autoQueueList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getAutoHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleAutoDrawer() {
+  const el = document.getElementById("autoDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadAutoSnapshot();
+}
+async function loadAutoSnapshot() {
+  const box = document.getElementById("execReportBox");
+  const list = document.getElementById("autoQueueList");
+  try {
+    const [rRes, qRes] = await Promise.all([
+      fetch("/api/v1/automation/executive-report", { headers: getAutoHeaders() }),
+      fetch("/api/v1/automation/queue?limit=8", { headers: getAutoHeaders() })
+    ]);
+    if (!rRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + rRes.status + ").";
+      return;
+    }
+    const r = await rRes.json();
+    box.innerHTML =
+      "<b>Funil:</b> " + r.open_deals_count + " abertos (R$ " + r.open_pipeline_value + ") | <b>Ganhos:</b> R$ " + r.won_revenue_total +
+      "<br><b>Contratos Ativos:</b> " + r.active_contracts_count + " (MRR R$ " + r.contracts_mrr_total + ")" +
+      "<br><b>Caixa Líquido Pós-Comissão:</b> R$ " + r.net_cash_after_commissions +
+      "<br><b>Disparos Enviados:</b> " + r.dispatches_sent_count + " | <b>Na Fila:</b> " + r.dispatches_queued_count;
+    const q = qRes.ok ? await qRes.json() : [];
+    list.innerHTML = q.map(item =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #6366f1;'>" +
+      "<b>[" + item.channel + " • " + item.status + "]</b> " + item.destination + "<br>" +
+      "<span style='color:#94a3b8;'>" + item.rendered_message + "</span></div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhum disparo registrado na fila ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar automação: " + err;
+  }
+}
+async function sendQuickDispatch() {
+  const destination = document.getElementById("autoDestPhone").value.trim();
+  const rendered_message = document.getElementById("autoMsgText").value.trim();
+  if (!destination || !rendered_message) return alert("Preencha Destino e Mensagem.");
+  const res = await fetch("/api/v1/automation/queue", {
+    method: "POST",
+    headers: getAutoHeaders(),
+    body: JSON.stringify({ channel: "WHATSAPP", destination, rendered_message })
+  });
+  if (!res.ok) return alert("Falha ao enfileirar: " + (await res.text()));
+  await fetch("/api/v1/automation/worker/run-cycle", { method: "POST", headers: getAutoHeaders() });
+  document.getElementById("autoDestPhone").value = "";
+  document.getElementById("autoMsgText").value = "";
+  loadAutoSnapshot();
+}
+async function runDunningScan() {
+  const res = await fetch("/api/v1/automation/dunning/scan-overdue", {
+    method: "POST",
+    headers: getAutoHeaders()
+  });
+  if (!res.ok) return alert("Falha na varredura: " + (await res.text()));
+  const data = await res.json();
+  alert("Varredura concluída: " + data.newly_marked_overdue + " faturas vencidas marcadas, " + data.dispatches_enqueued + " cobranças enfileiradas.");
+  loadAutoSnapshot();
+}
+</script>
+
+
+<!-- TEAM_QUOTAS_PORTAL_WIDGET -->
+<div id="teamPortalDrawer" style="position:fixed;right:18px;top:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleTeamDrawer()" style="background:#0ea5e9;color:#082f49;font-weight:700;border:none;border-radius:999px;padding:11px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    Equipe, Metas &amp; Portal
+  </button>
+  <div id="teamDrawerBody" style="display:none;width:440px;max-width:92vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Equipe Comercial &amp; Portal do Cliente</strong>
+      <button onclick="loadTeamSnapshot()" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="teamLeaderboardBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:12px;">Clique em Atualizar para carregar ranking e metas do mês.</div>
+    <div style="display:grid;gap:7px;margin-bottom:12px;">
+      <input id="tmName" placeholder="Nome do Vendedor / SDR" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="tmEmail" placeholder="E-mail corporativo" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="tmQuota" type="number" step="0.01" placeholder="Meta Mensal R$ (ex: 20000)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="createQuickTeamMember()" style="background:#0ea5e9;color:#082f49;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">+ Adicionar Membro &amp; Meta</button>
+    </div>
+    <div style="display:grid;gap:7px;margin-bottom:10px;">
+      <input id="ptCustomerName" placeholder="Cliente para Link de Portal Self-Service" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="createQuickPortalLink()" style="background:#10b981;color:#06281e;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">Gerar Link Público do Portal</button>
+    </div>
+    <div id="portalLinksBox" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getTeamHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleTeamDrawer() {
+  const el = document.getElementById("teamDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadTeamSnapshot();
+}
+async function loadTeamSnapshot() {
+  const box = document.getElementById("teamLeaderboardBox");
+  const linksBox = document.getElementById("portalLinksBox");
+  try {
+    const [lRes, pRes] = await Promise.all([
+      fetch("/api/v1/team/leaderboard", { headers: getTeamHeaders() }),
+      fetch("/api/v1/team/portal-links", { headers: getTeamHeaders() })
+    ]);
+    if (!lRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + lRes.status + ").";
+      return;
+    }
+    const lb = await lRes.json();
+    const rows = (lb.leaderboard || []).map((m, idx) =>
+      "#" + (idx + 1) + " <b>" + m.full_name + "</b> (" + m.role + "): R$ " + m.revenue_achieved + " / R$ " + m.revenue_target + " (" + m.revenue_attainment_percent + "%)"
+    ).join("<br>");
+    box.innerHTML =
+      "<b>Competência:</b> " + lb.period_ym +
+      " | <b>Atingimento Equipe:</b> " + lb.team_attainment_percent + "%" +
+      "<br>" + (rows || "<span style='color:#94a3b8;'>Nenhum vendedor cadastrado ainda.</span>");
+    const links = pRes.ok ? await pRes.json() : [];
+    linksBox.innerHTML = links.slice(0, 5).map(l =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #0ea5e9;'>" +
+      "<b>" + l.customer_name + "</b> • Acessos: " + l.access_count + "<br>" +
+      "<a href='" + l.public_page_url + "' target='_blank' style='color:#38bdf8;'>Abrir Página do Cliente</a>" +
+      "</div>"
+    ).join("");
+  } catch (err) {
+    box.textContent = "Erro ao consultar equipe/portal: " + err;
+  }
+}
+async function createQuickTeamMember() {
+  const full_name = document.getElementById("tmName").value.trim();
+  const email = document.getElementById("tmEmail").value.trim();
+  const monthly_revenue_quota = parseFloat(document.getElementById("tmQuota").value || "15000");
+  if (!full_name || !email) return alert("Preencha Nome e E-mail.");
+  const res = await fetch("/api/v1/team/members", {
+    method: "POST",
+    headers: getTeamHeaders(),
+    body: JSON.stringify({ full_name, email, monthly_revenue_quota })
+  });
+  if (!res.ok) return alert("Erro ao cadastrar membro: " + (await res.text()));
+  document.getElementById("tmName").value = "";
+  document.getElementById("tmEmail").value = "";
+  document.getElementById("tmQuota").value = "";
+  loadTeamSnapshot();
+}
+async function createQuickPortalLink() {
+  const customer_name = document.getElementById("ptCustomerName").value.trim();
+  if (!customer_name) return alert("Informe o nome do cliente.");
+  const res = await fetch("/api/v1/team/portal-links", {
+    method: "POST",
+    headers: getTeamHeaders(),
+    body: JSON.stringify({ customer_name })
+  });
+  if (!res.ok) return alert("Erro ao gerar link: " + (await res.text()));
+  document.getElementById("ptCustomerName").value = "";
+  loadTeamSnapshot();
+}
+</script>
+
+
+<!-- SAAS_GATEWAY_WIDGET -->
+<div id="saasGatewayDrawer" style="position:fixed;left:18px;top:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleSaasDrawer()" style="background:#a855f7;color:#faf5ff;font-weight:700;border:none;border-radius:999px;padding:11px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    SaaS &amp; Gateways
+  </button>
+  <div id="saasDrawerBody" style="display:none;width:430px;max-width:92vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Plano SaaS, Consumo &amp; Webhooks Inbound</strong>
+      <button onclick="loadSaasSnapshot()" style="background:#1e293b;color:#c084fc;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="saasUsageBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:12px;">Clique em Atualizar para consultar plano e telemetria do tenant.</div>
+    <div style="display:grid;gap:7px;margin-bottom:10px;">
+      <input id="whSimInvNum" placeholder="Simular Baixa PIX via Webhook (ex: FAT-2026-0001)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="simulateInboundPixWebhook()" style="background:#a855f7;color:#faf5ff;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">Simular Callback Gateway PIX</button>
+    </div>
+    <div id="saasReceiptsList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getSaasHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleSaasDrawer() {
+  const el = document.getElementById("saasDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadSaasSnapshot();
+}
+async function loadSaasSnapshot() {
+  const box = document.getElementById("saasUsageBox");
+  const list = document.getElementById("saasReceiptsList");
+  try {
+    const [uRes, rRes] = await Promise.all([
+      fetch("/api/v1/saas/usage", { headers: getSaasHeaders() }),
+      fetch("/api/v1/saas/webhooks/receipts?limit=6", { headers: getSaasHeaders() })
+    ]);
+    if (!uRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + uRes.status + ").";
+      return;
+    }
+    const u = await uRes.json();
+    box.innerHTML =
+      "<b>Plano:</b> " + u.plan_tier + " (" + u.billing_status + ")" +
+      "<br><b>Equipe:</b> " + u.active_team_members + "/" + u.max_team_members + " (" + u.team_usage_percent + "%)" +
+      "<br><b>Disparos Mês:</b> " + u.dispatches_this_month + "/" + u.max_monthly_dispatches + " (" + u.dispatches_usage_percent + "%)" +
+      "<br><b>Endpoint Público Gateway:</b> <code>/api/v1/saas/webhooks/public/pix-gateway</code>";
+    const recs = rRes.ok ? await rRes.json() : [];
+    list.innerHTML = recs.map(rc =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #a855f7;'>" +
+      "<b>[" + rc.provider + " • " + rc.processing_status + "]</b> " + rc.event_name + "<br>" +
+      "<span style='color:#94a3b8;'>" + rc.summary + "</span></div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhum webhook inbound recebido ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar SaaS/Gateways: " + err;
+  }
+}
+async function simulateInboundPixWebhook() {
+  const invoice_number = document.getElementById("whSimInvNum").value.trim();
+  if (!invoice_number) return alert("Informe o número da fatura (ex: FAT-2026-0001).");
+  const res = await fetch("/api/v1/saas/webhooks/inbound/pix-gateway", {
+    method: "POST",
+    headers: getSaasHeaders(),
+    body: JSON.stringify({ event: "PAYMENT_CONFIRMED", invoice_number, status: "PAID" })
+  });
+  if (!res.ok) return alert("Falha no callback: " + (await res.text()));
+  const data = await res.json();
+  alert(data.summary);
+  document.getElementById("whSimInvNum").value = "";
+  loadSaasSnapshot();
+}
+</script>
+
+
+<!-- GOVERNANCE_CSV_WIDGET -->
+<div id="govCsvDrawer" style="position:fixed;left:50%;transform:translateX(-50%);top:18px;z-index:9999;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleGovDrawer()" style="background:#14b8a6;color:#042f2e;font-weight:700;border:none;border-radius:999px;padding:11px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    Governança &amp; CSV
+  </button>
+  <div id="govDrawerBody" style="display:none;width:460px;max-width:94vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Diagnóstico, Auditoria &amp; Exportação CSV</strong>
+      <button onclick="loadGovSnapshot()" style="background:#1e293b;color:#2dd4bf;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="govHealthBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:10px;">Clique em Atualizar para verificar saúde dos 10 módulos.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      <button onclick="downloadGovCsv('/api/v1/governance/exports/invoices.csv','faturas.csv')" style="background:#14b8a6;color:#042f2e;font-weight:700;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;">CSV Faturas</button>
+      <button onclick="downloadGovCsv('/api/v1/governance/exports/commissions.csv','comissoes.csv')" style="background:#f59e0b;color:#1c1917;font-weight:700;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;">CSV Comissões</button>
+      <button onclick="downloadGovCsv('/api/v1/governance/exports/deals.csv','pipeline_crm.csv')" style="background:#38bdf8;color:#082f49;font-weight:700;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;">CSV Funil CRM</button>
+    </div>
+    <div id="govTimelineList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getGovHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token"))) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleGovDrawer() {
+  const el = document.getElementById("govDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadGovSnapshot();
+}
+async function loadGovSnapshot() {
+  const box = document.getElementById("govHealthBox");
+  const list = document.getElementById("govTimelineList");
+  try {
+    const [hRes, tRes] = await Promise.all([
+      fetch("/api/v1/governance/health-matrix", { headers: getGovHeaders() }),
+      fetch("/api/v1/governance/timeline?limit=8", { headers: getGovHeaders() })
+    ]);
+    if (!hRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + hRes.status + ").";
+      return;
+    }
+    const h = await hRes.json();
+    box.innerHTML =
+      "<b>PostgreSQL:</b> ONLINE (" + h.database_latency_ms + " ms) | <b>Módulos Ativos:</b> 10/10" +
+      "<br><b>Negócios:</b> " + h.counters.crm_deals +
+      " | <b>Contratos:</b> " + h.counters.crm_contracts +
+      " | <b>Faturas:</b> " + h.counters.billing_invoices +
+      " | <b>Comissões:</b> " + h.counters.sales_commissions;
+    const evs = tRes.ok ? await tRes.json() : [];
+    list.innerHTML = evs.map(ev =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #14b8a6;'>" +
+      "<b>[" + ev.category + " • " + ev.event_type + "]</b><br>" +
+      "<span style='color:#94a3b8;'>" + ev.summary + "</span></div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhum evento registrado na timeline ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar governança: " + err;
+  }
+}
+async function downloadGovCsv(url, filename) {
+  const res = await fetch(url, { headers: getGovHeaders() });
+  if (!res.ok) return alert("Falha ao exportar CSV: " + (await res.text()));
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+</script>
+
+</body>
+</html>

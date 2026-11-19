@@ -1,0 +1,31 @@
+# Ambientes e segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*secret*
+*token*
+
+# Backups, logs e arquivos temporários de instalação
+backups/
+*.sql
+*.sql.gz
+*.bak
+*.log
+
+# Python & ambientes virtuais
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# IDEs e sistema
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
