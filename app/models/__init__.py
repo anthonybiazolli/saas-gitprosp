@@ -171,3 +171,8 @@ from app.models.saas_gateway import (
     SubscriptionBillingStatus,
     TenantSaasSubscription,
 )
+
+from app.models.evolution_bridge import (
+    EvolutionChannelConfig,
+    OmnichannelMessageLog,
+)

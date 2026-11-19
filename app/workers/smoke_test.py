@@ -1,4 +1,4 @@
-"""Suíte automatizada de validação End-to-End (Módulos 5 a 10) executável via python -m app.workers.smoke_test."""
+"""Suíte automatizada de validação End-to-End (Módulos 5 a 11) executável via python -m app.workers.smoke_test."""
 
 from __future__ import annotations
 
@@ -229,8 +229,15 @@ async def run_smoke_suite() -> None:
             f"Faturas no banco: {hm['counters']['billing_invoices']})"
         )
 
+        code, evo_cfg = await asgi_request("GET", "/api/v1/evolution/config")
+        assert code == 200, f"Evolution config falhou ({code}): {evo_cfg}"
+        print(
+            f"  [PASS] 9. Conector Evolution API v2 OK (Instância: {evo_cfg['instance_name']} | "
+            f"Ativo: {evo_cfg['is_enabled']})"
+        )
+
         print()
-        print("[SUCESSO TOTAL] Todos os 8 testes End-to-End passaram sem erros!")
+        print("[SUCESSO TOTAL] Todos os 9 testes End-to-End passaram sem erros!")
     finally:
         app.dependency_overrides.clear()
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Orquestrador Operacional de Produção do Comercial SaaS (Módulos 1 a 10).
+Orquestrador Operacional de Produção do Comercial SaaS (Módulos 1 a 11).
 
 Comandos disponíveis:
   python3 ~/apps/comercial-saas/manage_comercial_saas.py status
@@ -41,7 +41,7 @@ def _run(cmd: list[str], check: bool = True, capture: bool = False) -> subproces
 def _discover_session_dep() -> tuple[str, str]:
     """Detecta (module_path, func_name) da dependência de sessão usada nos routers."""
     v1_dir = PROJECT_DIR / "app" / "api" / "v1"
-    for fname in ("governance.py", "billing.py", "crm_deals.py"):
+    for fname in ("evolution_bridge.py", "governance.py", "billing.py", "crm_deals.py"):
         fpath = v1_dir / fname
         if not fpath.exists():
             continue
@@ -62,7 +62,7 @@ def ensure_smoke_test_module() -> None:
     if not init_file.exists():
         init_file.write_text('"""Workers e utilitários internos do Comercial SaaS."""\n', encoding="utf-8")
 
-    code = f'''"""Suíte automatizada de validação End-to-End (Módulos 5 a 10) executável via python -m app.workers.smoke_test."""
+    code = f'''"""Suíte automatizada de validação End-to-End (Módulos 5 a 11) executável via python -m app.workers.smoke_test."""
 
 from __future__ import annotations
 
@@ -293,8 +293,15 @@ async def run_smoke_suite() -> None:
             f"Faturas no banco: {{hm['counters']['billing_invoices']}})"
         )
 
+        code, evo_cfg = await asgi_request("GET", "/api/v1/evolution/config")
+        assert code == 200, f"Evolution config falhou ({{code}}): {{evo_cfg}}"
+        print(
+            f"  [PASS] 9. Conector Evolution API v2 OK (Instância: {{evo_cfg['instance_name']}} | "
+            f"Ativo: {{evo_cfg['is_enabled']}})"
+        )
+
         print()
-        print("[SUCESSO TOTAL] Todos os 8 testes End-to-End passaram sem erros!")
+        print("[SUCESSO TOTAL] Todos os 9 testes End-to-End passaram sem erros!")
     finally:
         app.dependency_overrides.clear()
 
@@ -330,7 +337,7 @@ def cmd_status() -> None:
 
 
 def cmd_init_db() -> None:
-    print("=== Sincronizando tabelas dos Módulos 1 a 10 no PostgreSQL ===")
+    print("=== Sincronizando tabelas dos Módulos 1 a 11 no PostgreSQL ===")
     init_script = (
         "import asyncio\n"
         "from app.db.base import Base\n"
@@ -339,7 +346,7 @@ def cmd_init_db() -> None:
         "async def main():\n"
         "    async with async_engine.begin() as conn:\n"
         "        await conn.run_sync(Base.metadata.create_all)\n"
-        "    print('[OK] Todas as tabelas (Módulos 1 a 10) verificadas/criadas no PostgreSQL.')\n"
+        "    print('[OK] Todas as tabelas (Módulos 1 a 11) verificadas/criadas no PostgreSQL.')\n"
         "asyncio.run(main())\n"
     )
     _run(["docker", "compose", "exec", "-T", "api", "python", "-c", init_script])
@@ -347,7 +354,7 @@ def cmd_init_db() -> None:
 
 def cmd_smoke_test() -> None:
     ensure_smoke_test_module()
-    print("=== Executando Suíte End-to-End (8 Testes) ===")
+    print("=== Executando Suíte End-to-End (9 Testes) ===")
     _run(["docker", "compose", "exec", "-T", "api", "python", "-m", "app.workers.smoke_test"])
 
 

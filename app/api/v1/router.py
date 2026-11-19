@@ -51,3 +51,7 @@ api_v1_router.include_router(saas_gateway.router, prefix="/saas", tags=["Planos 
 from app.api.v1 import governance
 
 api_v1_router.include_router(governance.router, prefix="/governance", tags=["Governança & Exportações CSV"])
+
+from app.api.v1 import evolution_bridge
+
+api_v1_router.include_router(evolution_bridge.router, prefix="/evolution", tags=["WhatsApp Evolution API v2"])

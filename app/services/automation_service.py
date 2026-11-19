@@ -544,3 +544,25 @@ async def get_executive_report(session: AsyncSession, tenant_id: uuid.UUID) -> E
         dispatches_queued_count=queued_cnt,
         dispatches_failed_count=failed_cnt,
     )
+
+
+# --- EVOLUTION_BRIDGE_DISPATCH_HOOK ---
+_orig_process_dispatch_queue = process_dispatch_queue
+
+
+async def process_dispatch_queue(
+    session,
+    tenant_id,
+    batch_size: int = 50,
+    *args,
+    **kwargs,
+):
+    from app.services import evolution_bridge_service
+
+    effective_limit = int(kwargs.get("limit", batch_size))
+    await evolution_bridge_service.dispatch_pending_whatsapp_via_evolution(
+        session, tenant_id, limit=effective_limit
+    )
+    return await _orig_process_dispatch_queue(
+        session, tenant_id, batch_size=batch_size, *args, **kwargs
+    )

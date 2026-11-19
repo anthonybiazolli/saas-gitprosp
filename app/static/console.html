@@ -896,5 +896,127 @@ async function downloadGovCsv(url, filename) {
 }
 </script>
 
+
+<!-- EVOLUTION_WHATSAPP_WIDGET -->
+<div id="evoWhatsAppDrawer" style="position:fixed;right:18px;top:68px;z-index:9998;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleEvoDrawer()" style="background:#22c55e;color:#052e16;font-weight:700;border:none;border-radius:999px;padding:11px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    WhatsApp Evolution
+  </button>
+  <div id="evoDrawerBody" style="display:none;width:440px;max-width:92vw;max-height:78vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Conector Evolution API v2 (Produção)</strong>
+      <button onclick="loadEvoSnapshot()" style="background:#1e293b;color:#4ade80;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="evoStatusBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:10px;">Clique em Atualizar para consultar a instância Evolution API.</div>
+    <div style="display:grid;gap:7px;margin-bottom:10px;">
+      <input id="evoBaseUrl" placeholder="URL Evolution API (ex: http://192.168.0.9:8080)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="evoApiKey" placeholder="Global/Instance API Key" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="evoInstance" placeholder="Nome da Instância (ex: comercial-principal)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+        <input id="evoEnabled" type="checkbox"> Ativar envio real automático na fila comercial
+      </label>
+      <div style="display:flex;gap:6px;">
+        <button onclick="saveEvoConfig()" style="flex:1;background:#22c55e;color:#052e16;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">Salvar Config</button>
+        <button onclick="setupEvoWebhook()" style="background:#0ea5e9;color:#082f49;font-weight:700;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;">Ativar Webhook</button>
+      </div>
+    </div>
+    <div style="display:grid;gap:7px;margin-bottom:10px;">
+      <input id="evoTestPhone" placeholder="WhatsApp Destino (ex: 5541999998888)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="evoTestMsg" placeholder="Mensagem de teste imediato" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="sendEvoTest()" style="background:#38bdf8;color:#082f49;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">Enviar Mensagem Teste</button>
+    </div>
+    <div id="evoMsgsBox" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getEvoHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token")) && !inp.id.startsWith("evo")) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleEvoDrawer() {
+  const el = document.getElementById("evoDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadEvoSnapshot();
+}
+async function loadEvoSnapshot() {
+  const box = document.getElementById("evoStatusBox");
+  const list = document.getElementById("evoMsgsBox");
+  try {
+    const [cRes, mRes] = await Promise.all([
+      fetch("/api/v1/evolution/config", { headers: getEvoHeaders() }),
+      fetch("/api/v1/evolution/messages?limit=6", { headers: getEvoHeaders() })
+    ]);
+    if (!cRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + cRes.status + ").";
+      return;
+    }
+    const cfg = await cRes.json();
+    document.getElementById("evoBaseUrl").value = cfg.base_url || "";
+    document.getElementById("evoInstance").value = cfg.instance_name || "";
+    document.getElementById("evoEnabled").checked = !!cfg.is_enabled;
+    box.innerHTML =
+      "<b>Instância:</b> " + cfg.instance_name +
+      " | <b>Modo:</b> " + (cfg.is_enabled ? "<span style='color:#4ade80;'>PRODUÇÃO ATIVA</span>" : "<span style='color:#fbbf24;'>SIMULAÇÃO</span>") +
+      "<br><b>Estado:</b> " + cfg.last_connection_state + " | <b>Key:</b> " + cfg.api_key_masked;
+    const msgs = mRes.ok ? await mRes.json() : [];
+    list.innerHTML = msgs.map(m =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid " + (m.direction === "INBOUND" ? "#38bdf8" : "#22c55e") + ";'>" +
+      "<b>[" + m.direction + " • " + m.delivery_status + "]</b> " + m.phone_number + "<br>" +
+      "<span style='color:#cbd5e1;'>" + m.message_text.slice(0, 120) + "</span></div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhuma mensagem WhatsApp registrada ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar Evolution API: " + err;
+  }
+}
+async function saveEvoConfig() {
+  const body = {
+    base_url: document.getElementById("evoBaseUrl").value.trim() || undefined,
+    instance_name: document.getElementById("evoInstance").value.trim() || undefined,
+    is_enabled: document.getElementById("evoEnabled").checked
+  };
+  const apiKey = document.getElementById("evoApiKey").value.trim();
+  if (apiKey) body.api_key = apiKey;
+  const res = await fetch("/api/v1/evolution/config", {
+    method: "PUT",
+    headers: getEvoHeaders(),
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) return alert("Erro ao salvar config: " + (await res.text()));
+  document.getElementById("evoApiKey").value = "";
+  loadEvoSnapshot();
+}
+async function setupEvoWebhook() {
+  const res = await fetch("/api/v1/evolution/configure-webhook", {
+    method: "POST",
+    headers: getEvoHeaders(),
+    body: JSON.stringify({ public_base_url: window.location.origin })
+  });
+  const data = await res.json();
+  alert("Webhook configurado (" + data.http_status + "): " + data.webhook_url);
+}
+async function sendEvoTest() {
+  const phone_number = document.getElementById("evoTestPhone").value.trim();
+  const message = document.getElementById("evoTestMsg").value.trim() || "Teste Comercial SaaS via Evolution API!";
+  if (!phone_number) return alert("Informe o número de destino.");
+  const res = await fetch("/api/v1/evolution/send-test", {
+    method: "POST",
+    headers: getEvoHeaders(),
+    body: JSON.stringify({ phone_number, message })
+  });
+  const data = await res.json();
+  alert("Status envio: " + data.delivery_status + (data.error_detail ? " | " + data.error_detail : ""));
+  loadEvoSnapshot();
+}
+</script>
+
 </body>
 </html>
