@@ -176,3 +176,10 @@ from app.models.evolution_bridge import (
     EvolutionChannelConfig,
     OmnichannelMessageLog,
 )
+
+from app.models.outbound_cadences import (
+    CadenceEnrollment,
+    CadenceExecutionLog,
+    ProspectCadence,
+    ProspectCadenceStep,
+)

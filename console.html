@@ -958,5 +958,124 @@ async function sendEvoTest() {
 }
 </script>
 
+
+<!-- OUTBOUND_CADENCES_WIDGET -->
+<div id="cadencesDrawer" style="position:fixed;left:18px;top:68px;z-index:9998;font-family:system-ui,-apple-system,sans-serif;">
+  <button onclick="toggleCadencesDrawer()" style="background:#8b5cf6;color:#f5f3ff;font-weight:700;border:none;border-radius:999px;padding:11px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+    Cadências SDR (D+0/D+2/D+5)
+  </button>
+  <div id="cadencesDrawerBody" style="display:none;width:460px;max-width:94vw;max-height:80vh;overflow:auto;margin-top:10px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 20px 45px rgba(0,0,0,.55);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:15px;">Motor de Cadências Ativas &amp; SDR IA</strong>
+      <button onclick="loadCadencesSnapshot()" style="background:#1e293b;color:#c4b5fd;border:1px solid #334155;border-radius:8px;padding:4px 10px;cursor:pointer;">Atualizar</button>
+    </div>
+    <div id="cadMetricsBox" style="font-size:12px;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:10px;">Clique em Atualizar para carregar cadências e métricas SDR.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <button onclick="bootstrapDefaultCadence()" style="background:#8b5cf6;color:#fff;font-weight:700;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;">+ Cadência D+0/D+2/D+5</button>
+      <button onclick="runCadenceTickNow()" style="background:#10b981;color:#052e16;font-weight:700;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;">Disparar Vencidos Agora</button>
+    </div>
+    <div style="display:grid;gap:6px;margin-bottom:12px;">
+      <select id="cadSelectId" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;"></select>
+      <input id="cadLeadName" placeholder="Nome do Lead (ex: Marcos Silva)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <input id="cadCompanyName" placeholder="Empresa (ex: Alfa Logística)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <div style="display:flex;gap:6px;">
+        <input id="cadLeadPhone" placeholder="WhatsApp (5541...)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+        <input id="cadLeadEmail" placeholder="E-mail" style="flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      </div>
+      <input id="cadContextNotes" placeholder="Contexto SDR IA (ex: expandindo filial em Curitiba)" style="padding:8px;border-radius:8px;border:1px solid #334155;background:#020617;color:#f8fafc;">
+      <button onclick="enrollCadenceLead()" style="background:#38bdf8;color:#082f49;font-weight:700;border:none;border-radius:8px;padding:8px;cursor:pointer;">Inscrever Lead &amp; Iniciar D+0</button>
+    </div>
+    <div id="cadEnrollmentsList" style="font-size:12px;display:grid;gap:6px;"></div>
+  </div>
+</div>
+<script>
+function getCadHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const inputs = Array.from(document.querySelectorAll("input"));
+  for (const inp of inputs) {
+    const key = (inp.id + " " + inp.name + " " + inp.placeholder).toLowerCase();
+    if (inp.value && key.includes("tenant")) h["X-Tenant-ID"] = inp.value.trim();
+    if (inp.value && (key.includes("api") || key.includes("key") || key.includes("token")) && !inp.id.startsWith("evo") && !inp.id.startsWith("cad")) {
+      h["X-API-Key"] = inp.value.trim();
+      h["Authorization"] = "Bearer " + inp.value.trim();
+    }
+  }
+  return h;
+}
+function toggleCadencesDrawer() {
+  const el = document.getElementById("cadencesDrawerBody");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+  if (el.style.display === "block") loadCadencesSnapshot();
+}
+async function loadCadencesSnapshot() {
+  const box = document.getElementById("cadMetricsBox");
+  const sel = document.getElementById("cadSelectId");
+  const list = document.getElementById("cadEnrollmentsList");
+  try {
+    const [mRes, cRes, eRes] = await Promise.all([
+      fetch("/api/v1/cadences/metrics", { headers: getCadHeaders() }),
+      fetch("/api/v1/cadences", { headers: getCadHeaders() }),
+      fetch("/api/v1/cadences/enrollments?limit=8", { headers: getCadHeaders() })
+    ]);
+    if (!mRes.ok) {
+      box.textContent = "Informe Tenant ID / API Key no console para autenticar (" + mRes.status + ").";
+      return;
+    }
+    const m = await mRes.json();
+    box.innerHTML =
+      "<b>Cadências Ativas:</b> " + m.active_cadences +
+      " | <b>Leads em Curso:</b> " + m.active_enrollments +
+      " | <b>Toques SDR:</b> " + m.total_touches_executed +
+      "<br><b>Taxa Resposta:</b> " + m.reply_rate_pct + "% | <b>Conversão CRM:</b> " + m.conversion_rate_pct + "%";
+    const cads = cRes.ok ? await cRes.json() : [];
+    sel.innerHTML = cads.map(c => "<option value='" + c.id + "'>" + c.name + "</option>").join("") || "<option value=''>Crie a cadência padrão primeiro</option>";
+    const enrs = eRes.ok ? await eRes.json() : [];
+    list.innerHTML = enrs.map(e =>
+      "<div style='background:#1e293b;padding:8px;border-radius:8px;border-left:3px solid #8b5cf6;'>" +
+      "<b>" + e.lead_name + "</b> (" + (e.company_name || "Lead") + ") — <b>" + e.status + "</b> (Etapa " + e.current_step_order + ")" +
+      "</div>"
+    ).join("") || "<span style='color:#94a3b8;'>Nenhum prospect inscrito ainda.</span>";
+  } catch (err) {
+    box.textContent = "Erro ao consultar cadências: " + err;
+  }
+}
+async function bootstrapDefaultCadence() {
+  const res = await fetch("/api/v1/cadences/bootstrap-default", { method: "POST", headers: getCadHeaders() });
+  if (!res.ok) return alert("Erro: " + (await res.text()));
+  loadCadencesSnapshot();
+}
+async function runCadenceTickNow() {
+  const res = await fetch("/api/v1/cadences/process-due", { method: "POST", headers: getCadHeaders() });
+  const data = await res.json();
+  alert("Ciclo concluído: " + data.dispatched_steps + " toque(s) disparado(s), " + data.auto_stopped_by_reply + " interrompido(s) por resposta.");
+  loadCadencesSnapshot();
+}
+async function enrollCadenceLead() {
+  const cadId = document.getElementById("cadSelectId").value;
+  if (!cadId) return alert("Crie ou selecione uma cadência primeiro.");
+  const body = {
+    lead_name: document.getElementById("cadLeadName").value.trim(),
+    company_name: document.getElementById("cadCompanyName").value.trim(),
+    phone: document.getElementById("cadLeadPhone").value.trim(),
+    email: document.getElementById("cadLeadEmail").value.trim(),
+    context_notes: document.getElementById("cadContextNotes").value.trim(),
+    start_immediately: true
+  };
+  if (!body.lead_name) return alert("Informe o nome do lead.");
+  const res = await fetch("/api/v1/cadences/" + cadId + "/enroll", {
+    method: "POST",
+    headers: getCadHeaders(),
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) return alert("Erro ao inscrever: " + (await res.text()));
+  document.getElementById("cadLeadName").value = "";
+  document.getElementById("cadCompanyName").value = "";
+  document.getElementById("cadLeadPhone").value = "";
+  document.getElementById("cadLeadEmail").value = "";
+  document.getElementById("cadContextNotes").value = "";
+  loadCadencesSnapshot();
+}
+</script>
+
 </body>
 </html>

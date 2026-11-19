@@ -34,9 +34,29 @@ async def run_forever(poll_interval_seconds: int = 10) -> None:
                     )
         except Exception as exc:
             logger.exception("Erro no ciclo do worker de automação: %s", exc)
+        await run_cadence_worker_tick()
         await asyncio.sleep(poll_interval_seconds)
 
 
 if __name__ == "__main__":
     interval = int(os.getenv("AUTOMATION_WORKER_INTERVAL_SECONDS", "10"))
     asyncio.run(run_forever(poll_interval_seconds=interval))
+
+
+# --- CADENCE_WORKER_TICK_HOOK ---
+async def run_cadence_worker_tick() -> None:
+    from app.db.session import get_db_session as _session_gen
+    from app.services import outbound_cadence_service
+
+    gen = _session_gen()
+    session = await gen.__anext__()
+    try:
+        await outbound_cadence_service.process_due_cadence_steps(session, tenant_id=None, batch_size=50)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+    finally:
+        try:
+            await gen.aclose()
+        except Exception:
+            pass

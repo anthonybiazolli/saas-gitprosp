@@ -33,6 +33,13 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _resolve_dispatch_status(candidates: tuple[str, ...]) -> DispatchQueueStatus:
+    for candidate in candidates:
+        if candidate in DispatchQueueStatus.__members__:
+            return DispatchQueueStatus[candidate]
+    return next(iter(DispatchQueueStatus))
+
+
 def normalize_br_phone(raw_phone: str, default_cc: str = "55") -> str:
     digits = re.sub(r"\D+", "", raw_phone or "")
     if not digits:
@@ -309,16 +316,20 @@ def _set_queue_error(item: Any, err_msg: str | None) -> None:
 async def dispatch_pending_whatsapp_via_evolution(
     session: AsyncSession, tenant_id: uuid.UUID, limit: int = 50
 ) -> int:
-    """Despacha itens PENDING da fila via Evolution API real se o tenant habilitou o canal."""
+    """Despacha itens pendentes da fila via Evolution API real se o tenant habilitou o canal."""
     cfg = await ensure_evolution_config(session, tenant_id)
     if not cfg.is_enabled:
         return 0
+
+    pending_status = _resolve_dispatch_status(("PENDING", "QUEUED", "SCHEDULED", "WAITING"))
+    sent_status = _resolve_dispatch_status(("SENT", "DELIVERED", "COMPLETED"))
+    failed_status = _resolve_dispatch_status(("FAILED", "ERROR"))
 
     stmt = (
         select(OutboundDispatchQueue)
         .where(
             OutboundDispatchQueue.tenant_id == tenant_id,
-            OutboundDispatchQueue.status == DispatchQueueStatus.PENDING,
+            OutboundDispatchQueue.status == pending_status,
         )
         .order_by(OutboundDispatchQueue.created_at.asc())
         .limit(limit)
@@ -338,7 +349,7 @@ async def dispatch_pending_whatsapp_via_evolution(
             or ""
         ).strip()
         if not dest:
-            item.status = DispatchQueueStatus.FAILED
+            item.status = failed_status
             _set_queue_error(item, "Destino WhatsApp vazio na fila.")
             processed += 1
             continue
@@ -389,14 +400,14 @@ async def dispatch_pending_whatsapp_via_evolution(
             item.attempts = current_attempts
 
         if log_row.delivery_status == "SENT":
-            item.status = DispatchQueueStatus.SENT
+            item.status = sent_status
             if hasattr(item, "sent_at"):
                 item.sent_at = _utcnow()
             _set_queue_error(item, None)
         else:
             _set_queue_error(item, log_row.error_detail)
             if current_attempts >= 3:
-                item.status = DispatchQueueStatus.FAILED
+                item.status = failed_status
         processed += 1
 
     await session.flush()
@@ -558,3 +569,19 @@ async def list_message_logs(
         .limit(limit)
     )
     return list((await session.execute(stmt)).scalars().all())
+
+
+# --- CADENCE_INBOUND_AUTO_STOP_HOOK ---
+_orig_handle_evolution_inbound_webhook = handle_evolution_inbound_webhook
+
+
+async def handle_evolution_inbound_webhook(session, tenant_id, payload):
+    res = await _orig_handle_evolution_inbound_webhook(session, tenant_id, payload)
+    if isinstance(res, dict) and res.get("status") == "processed" and res.get("phone"):
+        from app.services import outbound_cadence_service
+
+        stopped_cnt = await outbound_cadence_service.auto_stop_active_enrollments_by_phone(
+            session, tenant_id, str(res["phone"])
+        )
+        res["stopped_cadences_count"] = stopped_cnt
+    return res

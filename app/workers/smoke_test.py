@@ -1,4 +1,4 @@
-"""Suíte automatizada de validação End-to-End (Módulos 5 a 11) executável via python -m app.workers.smoke_test."""
+"""Suíte automatizada de validação End-to-End (Módulos 5 a 12) executável via python -m app.workers.smoke_test."""
 
 from __future__ import annotations
 
@@ -236,8 +236,38 @@ async def run_smoke_suite() -> None:
             f"Ativo: {evo_cfg['is_enabled']})"
         )
 
+        code, cad = await asgi_request("POST", "/api/v1/cadences/bootstrap-default")
+        assert code == 201, f"Cadence bootstrap falhou ({code}): {cad}"
+        code, enr = await asgi_request(
+            "POST",
+            f"/api/v1/cadences/{cad['id']}/enroll",
+            json_body={
+                "lead_name": "Ricardo Almeida",
+                "company_name": "Metalurgica Sul Brasil",
+                "email": "ricardo@metalurgicasul.com.br",
+                "phone": "5541988887777",
+                "role_title": "Diretor Comercial",
+                "segment": "Industria Metalurgica",
+                "context_notes": "empresa expandindo equipe externa no Parana",
+                "start_immediately": True,
+            },
+        )
+        assert code == 201, f"Cadence enroll falhou ({code}): {enr}"
+        code, tick = await asgi_request("POST", "/api/v1/cadences/process-due")
+        assert code == 200 and tick["dispatched_steps"] >= 1, f"Cadence tick falhou ({code}): {tick}"
+        code, conv = await asgi_request(
+            "POST",
+            f"/api/v1/cadences/enrollments/{enr['id']}/convert-deal",
+            json_body={"estimated_amount": 4800.0, "owner_name": "SDR IA"},
+        )
+        assert code == 200 and conv["enrollment_status"] == "CONVERTED", f"Convert deal falhou ({code}): {conv}"
+        print(
+            f"  [PASS] 10. Motor de Cadências D+0/D+2/D+5 & SDR IA OK "
+            f"(Toques disparados: {tick['dispatched_steps']} | Deal CRM: {conv['deal_title']})"
+        )
+
         print()
-        print("[SUCESSO TOTAL] Todos os 9 testes End-to-End passaram sem erros!")
+        print("[SUCESSO TOTAL] Todos os 10 testes End-to-End passaram sem erros!")
     finally:
         app.dependency_overrides.clear()
 

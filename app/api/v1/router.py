@@ -55,3 +55,7 @@ api_v1_router.include_router(governance.router, prefix="/governance", tags=["Gov
 from app.api.v1 import evolution_bridge
 
 api_v1_router.include_router(evolution_bridge.router, prefix="/evolution", tags=["WhatsApp Evolution API v2"])
+
+from app.api.v1 import outbound_cadences
+
+api_v1_router.include_router(outbound_cadences.router, prefix="/cadences", tags=["Cadências Outbound & SDR IA"])
